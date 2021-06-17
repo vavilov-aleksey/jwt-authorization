@@ -10,13 +10,13 @@ class UserService {
         const existingUser = await UserModel.findOne({ email });
 
         if (existingUser) {
-            throw new Error(`Пользователь с email адресом ${existingUser} уже существует`);
+            throw new Error(`Пользователь с email адресом ${existingUser.email} уже существует`);
         }
 
         const hashPassword = await bcrypt.hash(password, 3);
         const activationLink = uuid.v4();
         const user = await UserModel.create({ email, password: hashPassword, activationLink });
-        await mailService.sendActivationMail(email, activationLink);
+        await mailService.sendActivationMail(email, `${process.env.API_URL}/api/activate/${activationLink}`);
 
         const userDto = new UserDto(user); // get id, email, isActivated
         const tokens = tokenService.generateTokens({ ...userDto });
