@@ -4,13 +4,14 @@ const uuid = require("uuid");
 const mailService = require("./mail-service");
 const tokenService = require("./token-service");
 const UserDto = require("../dtos/user-dto");
+const ErrorApi = require("../exceptions/error-api");
 
 class UserService {
     async registration(email, password) {
         const existingUser = await UserModel.findOne({ email });
 
         if (existingUser) {
-            throw new Error(`Пользователь с email адресом ${existingUser.email} уже существует`);
+            throw ErrorApi.BadRequest(`Пользователь с email адресом ${existingUser.email} уже существует`);
         }
 
         const hashPassword = await bcrypt.hash(password, 3);
@@ -30,11 +31,37 @@ class UserService {
         const user = await UserModel.findOne({ activationLink });
 
         if (!user) {
-            throw new Error("Не корректная ссылка активации");
+            throw ErrorApi.BadRequest("Не корректная ссылка активации");
         }
 
         user.isActivated = true;
         await user.save();
+    }
+
+    async login(email, password) {
+        const user = await UserModel.findOne({ email });
+
+        if (!user) {
+            throw ErrorApi.BadRequest(`Пользователь с email адресом ${email} не был найден`);
+        }
+
+        const isPasswordEquals = await bcrypt.compare(password, user.password);
+
+        if (!isPasswordEquals) {
+            throw ErrorApi.BadRequest("Неверный пароль");
+        }
+
+        const userDto = new UserDto(user);
+        const tokens = tokenService.generateTokens({ ...userDto });
+
+        await tokenService.saveToken(userDto.id, tokens.refreshToken);
+
+        return { ...tokens, user: userDto };
+    }
+
+    async logout(refreshToken) {
+        const token = await tokenService.removeToken(refreshToken);
+        return token;
     }
 }
 
